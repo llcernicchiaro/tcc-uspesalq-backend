@@ -1,0 +1,137 @@
+# "org" ensures this Service is used with the correct Serverless Framework Access Key.
+org: llcernicchiaro
+# "app" enables Serverless Framework Dashboard features and sharing them with other Services.
+app: tcc
+# "service" is the name of this project. This will also be added to your AWS resource names.
+service: tcc-uspesalq
+
+provider:
+  name: aws
+  runtime: nodejs22.x
+  profile: default
+  
+functions:
+  createUser:
+    handler: src/handlers/users.createUser
+    events:
+      - http:
+          path: users
+          method: post
+
+  listUsers:
+    handler: src/handlers/users.listUsers
+    events:
+      - http:
+          path: users
+          method: get
+
+  createTraining:
+    handler: src/handlers/training.createTraining
+    events:
+      - http:
+          path: training
+          method: post
+
+  listTrainings:
+    handler: src/handlers/training.listTrainings
+    events:
+      - http:
+          path: training
+          method: get
+
+  updateTraining:
+    handler: src/handlers/training.updateTraining
+    events:
+      - http:
+          path: training/{id}
+          method: put
+
+  createRegistration:
+    handler: src/handlers/registrations.createRegistration
+    events:
+      - http:
+          path: registrations
+          method: post
+
+  listRegistrations:
+    handler: src/handlers/registrations.listRegistrations
+    events:
+      - http:
+          path: registrations
+          method: get
+
+  createPerformance:
+    handler: src/handlers/performances.createPerformance
+    events:
+      - http:
+          path: performances
+          method: post
+
+  listPerformances:
+    handler: src/handlers/performances.listPerformances
+    events:
+      - http:
+          path: performances
+          method: get
+
+resources:
+  Resources:
+    UsersTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: UsersTable
+        AttributeDefinitions:
+          - AttributeName: id
+            AttributeType: S
+        KeySchema:
+          - AttributeName: id
+            KeyType: HASH
+        BillingMode: PAY_PER_REQUEST
+
+    TrainingsTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: TrainingsTable
+        AttributeDefinitions:
+          - AttributeName: id
+            AttributeType: S
+          - AttributeName: date
+            AttributeType: S
+        KeySchema:
+          - AttributeName: id
+            KeyType: HASH
+        GlobalSecondaryIndexes:
+          - IndexName: DateIndex
+            KeySchema:
+              - AttributeName: date
+                KeyType: HASH
+            Projection:
+              ProjectionType: ALL
+        BillingMode: PAY_PER_REQUEST
+
+    RegistrationsTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: RegistrationsTable
+        AttributeDefinitions:
+          - AttributeName: id
+            AttributeType: S
+        KeySchema:
+          - AttributeName: id
+            KeyType: HASH
+        BillingMode: PAY_PER_REQUEST
+
+    PerformancesTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: PerformancesTable
+        AttributeDefinitions:
+          - AttributeName: id
+            AttributeType: S
+        KeySchema:
+          - AttributeName: id
+            KeyType: HASH
+        BillingMode: PAY_PER_REQUEST
+
+plugins:
+  - serverless-offline
