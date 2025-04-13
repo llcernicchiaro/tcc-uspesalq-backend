@@ -1,34 +1,35 @@
-import type { APIGatewayEvent } from "aws-lambda";
+import type { APIGatewayEventWithUserAndBody } from "../types/api-gateway.d.ts";
 
-// import { z } from "zod";
 import { PutCommand, ScanCommand, UpdateCommand } from "@aws-sdk/lib-dynamodb";
 
 import { createHandler } from "../utils/handlers.ts";
 import { dynamoDB } from "../utils/dynamodb.ts";
-// import { validateWithZod } from "../middlewares/validateWithZod.ts";
+import { addMetadata } from "../utils/addMetadata.ts";
 
-// const trainingSchema = z.object({
-//   id: z.string(),
-//   name: z.string(),
-//   date: z.string(),
-//   distance: z.number().positive(),
-// });
+import { validateWithZod } from "../middlewares/validateWithZod.ts";
 
-export const createTraining = createHandler(async (event: APIGatewayEvent) => {
-  const { id, name, date, distance } = JSON.parse(event.body || "{}");
+import {
+  trainingInputSchema,
+  type TrainingInput,
+} from "../types/schemas/training.ts";
 
-  await dynamoDB.send(
-    new PutCommand({
-      TableName: "TrainingsTable",
-      Item: { id, name, date, distance },
-    })
-  );
+export const createTraining = createHandler(
+  async (event: APIGatewayEventWithUserAndBody<TrainingInput>) => {
+    const { name, date } = event.body;
 
-  return {
-    statusCode: 201,
-    body: JSON.stringify({ message: "Training created" }),
-  };
-});
+    const item = addMetadata({ name, date });
+
+    await dynamoDB.send(
+      new PutCommand({ TableName: "TrainingsTable", Item: item })
+    );
+
+    return {
+      statusCode: 201,
+      body: JSON.stringify({ message: "Training created", training: item }),
+    };
+  },
+  [validateWithZod(trainingInputSchema)]
+);
 
 export const listTrainings = createHandler(async () => {
   const result = await dynamoDB.send(
@@ -41,31 +42,33 @@ export const listTrainings = createHandler(async () => {
   };
 });
 
-export const updateTraining = createHandler(async (event) => {
-  const id = event.pathParameters?.id;
-  const { name, distance, updatedAt } = JSON.parse(event.body || "{}");
+export const updateTraining = createHandler(
+  async (event: APIGatewayEventWithUserAndBody<TrainingInput>) => {
+    const id = event.pathParameters?.id;
+    const { name } = event.body;
 
-  await dynamoDB.send(
-    new UpdateCommand({
-      TableName: "TrainingsTable",
-      Key: { id },
-      UpdateExpression:
-        "SET #name = :name, #distance = :distance, #updatedAt = :updatedAt",
-      ExpressionAttributeNames: {
-        "#name": "name",
-        "#distance": "distance",
-        "#updatedAt": "updatedAt",
-      },
-      ExpressionAttributeValues: {
-        ":name": name,
-        ":distance": distance,
-        ":updatedAt": updatedAt,
-      },
-    })
-  );
+    await dynamoDB.send(
+      new UpdateCommand({
+        TableName: "TrainingsTable",
+        Key: { id },
+        UpdateExpression:
+          "SET #name = :name, #distance = :distance, #updatedAt = :updatedAt",
+        ExpressionAttributeNames: {
+          "#name": "name",
+          "#distance": "distance",
+          "#updatedAt": "updatedAt",
+        },
+        ExpressionAttributeValues: {
+          ":name": name,
+          // ":distance": distance,
+          // ":updatedAt": updatedAt,
+        },
+      })
+    );
 
-  return {
-    statusCode: 200,
-    body: JSON.stringify({ message: "Workout updated", updatedAt }),
-  };
-});
+    return {
+      statusCode: 200,
+      body: JSON.stringify({ message: "Workout updated" }),
+    };
+  }
+);

@@ -8,18 +8,29 @@ service: tcc-uspesalq
 provider:
   name: aws
   runtime: nodejs22.x
+  region: sa-east-1
   profile: default
-  
-functions:
-  createUser:
-    handler: src/handlers/users.createUser
-    events:
-      - http:
-          path: users
-          method: post
+  environment:
+    NODE_ENV: ${opt:stage, 'development'}
+  iam:
+    role:
+      statements:
+        - Effect: Allow
+          Action:
+            - dynamodb:PutItem
+            - dynamodb:GetItem
+            - dynamodb:Query
+            - dynamodb:UpdateItem
+          Resource:
+            - arn:aws:dynamodb:sa-east-1:299689717750:table/TrainingsTable
+            # - arn:aws:dynamodb:sa-east-1:299689717750:table/PerformancesTable
+            # - arn:aws:dynamodb:sa-east-1:299689717750:table/GroupsTable
+            # - arn:aws:dynamodb:sa-east-1:299689717750:table/EventsTable
+            - arn:aws:dynamodb:sa-east-1:299689717750:table/UsersTable
 
+functions:
   listUsers:
-    handler: src/handlers/users.listUsers
+    handler: src/handlers/user.listUsers
     events:
       - http:
           path: users
@@ -39,40 +50,40 @@ functions:
           path: training
           method: get
 
-  updateTraining:
-    handler: src/handlers/training.updateTraining
-    events:
-      - http:
-          path: training/{id}
-          method: put
+  # updateTraining:
+  #   handler: src/handlers/training.updateTraining
+  #   events:
+  #     - http:
+  #         path: training/{id}
+  #         method: put
 
-  createRegistration:
-    handler: src/handlers/registrations.createRegistration
-    events:
-      - http:
-          path: registrations
-          method: post
+  # createRegistration:
+  #   handler: src/handlers/registration.createRegistration
+  #   events:
+  #     - http:
+  #         path: registrations
+  #         method: post
 
-  listRegistrations:
-    handler: src/handlers/registrations.listRegistrations
-    events:
-      - http:
-          path: registrations
-          method: get
+  # listRegistrations:
+  #   handler: src/handlers/registration.listRegistrations
+  #   events:
+  #     - http:
+  #         path: registrations
+  #         method: get
 
-  createPerformance:
-    handler: src/handlers/performances.createPerformance
-    events:
-      - http:
-          path: performances
-          method: post
+  # createPerformance:
+  #   handler: src/handlers/performance.createPerformance
+  #   events:
+  #     - http:
+  #         path: performances
+  #         method: post
 
-  listPerformances:
-    handler: src/handlers/performances.listPerformances
-    events:
-      - http:
-          path: performances
-          method: get
+  # listPerformances:
+  #   handler: src/handlers/performance.listPerformances
+  #   events:
+  #     - http:
+  #         path: performances
+  #         method: get
 
 resources:
   Resources:
