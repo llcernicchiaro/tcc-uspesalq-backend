@@ -21,6 +21,8 @@ provider:
             - dynamodb:GetItem
             - dynamodb:Query
             - dynamodb:UpdateItem
+            - dynamodb:DeleteItem
+            - dynamodb:Scan
           Resource:
             - arn:aws:dynamodb:sa-east-1:299689717750:table/TrainingsTable
             # - arn:aws:dynamodb:sa-east-1:299689717750:table/PerformancesTable
