@@ -7,7 +7,7 @@
   "type": "module",
   "main": "handler.js",
   "scripts": {
-    "offline": "nodemon -e ts,yml --exec \"sls offline start\"",
+    "offline": "nodemon -e ts,yml --exec \"sls offline start --httpPort=3001\"",
     "dev": "serverless dev",
     "deploy": "serverless deploy",
     "remove": "serverless remove",

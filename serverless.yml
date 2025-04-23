@@ -23,12 +23,13 @@ provider:
             - dynamodb:UpdateItem
             - dynamodb:DeleteItem
             - dynamodb:Scan
+            - dynamodb:BatchGetItem
           Resource:
-            - arn:aws:dynamodb:sa-east-1:299689717750:table/TrainingsTable
-            # - arn:aws:dynamodb:sa-east-1:299689717750:table/PerformancesTable
-            # - arn:aws:dynamodb:sa-east-1:299689717750:table/GroupsTable
-            # - arn:aws:dynamodb:sa-east-1:299689717750:table/EventsTable
+            - arn:aws:dynamodb:sa-east-1:299689717750:table/PerformancesTable
+            - arn:aws:dynamodb:sa-east-1:299689717750:table/GroupsTable
+            - arn:aws:dynamodb:sa-east-1:299689717750:table/EventsTable
             - arn:aws:dynamodb:sa-east-1:299689717750:table/UsersTable
+            - arn:aws:dynamodb:sa-east-1:299689717750:table/GroupMembershipTable
 
 functions:
   listUsers:
@@ -37,55 +38,47 @@ functions:
       - http:
           path: users
           method: get
+          authorizer:
+            type: COGNITO_USER_POOLS
+            authorizerId:
+              Ref: ApiGatewayAuthorizer
+          cors: true
 
-  createTraining:
-    handler: src/handlers/training.createTraining
+  createGroup:
+    handler: src/handlers/group.createGroup
     events:
       - http:
-          path: training
+          path: group
           method: post
+          authorizer:
+            type: COGNITO_USER_POOLS
+            authorizerId:
+              Ref: ApiGatewayAuthorizer
+          cors: true
 
-  listTrainings:
-    handler: src/handlers/training.listTrainings
+  listGroups:
+    handler: src/handlers/group.listGroups
     events:
       - http:
-          path: training
+          path: groups
           method: get
+          authorizer:
+            type: COGNITO_USER_POOLS
+            authorizerId:
+              Ref: ApiGatewayAuthorizer
+          cors: true
 
-  # updateTraining:
-  #   handler: src/handlers/training.updateTraining
-  #   events:
-  #     - http:
-  #         path: training/{id}
-  #         method: put
-
-  # createRegistration:
-  #   handler: src/handlers/registration.createRegistration
-  #   events:
-  #     - http:
-  #         path: registrations
-  #         method: post
-
-  # listRegistrations:
-  #   handler: src/handlers/registration.listRegistrations
-  #   events:
-  #     - http:
-  #         path: registrations
-  #         method: get
-
-  # createPerformance:
-  #   handler: src/handlers/performance.createPerformance
-  #   events:
-  #     - http:
-  #         path: performances
-  #         method: post
-
-  # listPerformances:
-  #   handler: src/handlers/performance.listPerformances
-  #   events:
-  #     - http:
-  #         path: performances
-  #         method: get
+  updateGroup:
+    handler: src/handlers/group.updateGroup
+    events:
+      - http:
+          path: group/{id}
+          method: put
+          authorizer:
+            type: COGNITO_USER_POOLS
+            authorizerId:
+              Ref: ApiGatewayAuthorizer
+          cors: true
 
 resources:
   Resources:
@@ -101,31 +94,45 @@ resources:
             KeyType: HASH
         BillingMode: PAY_PER_REQUEST
 
-    TrainingsTable:
+    GroupsTable:
       Type: AWS::DynamoDB::Table
       Properties:
-        TableName: TrainingsTable
+        TableName: GroupsTable
         AttributeDefinitions:
           - AttributeName: id
-            AttributeType: S
-          - AttributeName: date
             AttributeType: S
         KeySchema:
           - AttributeName: id
             KeyType: HASH
+        BillingMode: PAY_PER_REQUEST
+
+    GroupMembershipTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: GroupMembershipTable
+        BillingMode: PAY_PER_REQUEST
+        AttributeDefinitions:
+          - AttributeName: userId
+            AttributeType: S
+          - AttributeName: groupId
+            AttributeType: S
+        KeySchema:
+          - AttributeName: userId
+            KeyType: HASH
+          - AttributeName: groupId
+            KeyType: RANGE
         GlobalSecondaryIndexes:
-          - IndexName: DateIndex
+          - IndexName: GroupIdIndex
             KeySchema:
-              - AttributeName: date
+              - AttributeName: groupId
                 KeyType: HASH
             Projection:
               ProjectionType: ALL
-        BillingMode: PAY_PER_REQUEST
 
-    RegistrationsTable:
+    EventsTable:
       Type: AWS::DynamoDB::Table
       Properties:
-        TableName: RegistrationsTable
+        TableName: EventsTable
         AttributeDefinitions:
           - AttributeName: id
             AttributeType: S
@@ -145,6 +152,17 @@ resources:
           - AttributeName: id
             KeyType: HASH
         BillingMode: PAY_PER_REQUEST
+
+    ApiGatewayAuthorizer:
+      Type: AWS::ApiGateway::Authorizer
+      Properties:
+        Name: CognitoAuth-${sls:stage}
+        Type: COGNITO_USER_POOLS
+        IdentitySource: method.request.header.Authorization
+        RestApiId:
+          Ref: ApiGatewayRestApi
+        ProviderARNs:
+          - arn:aws:cognito-idp:sa-east-1:299689717750:userpool/sa-east-1_HZRlUjG0F
 
 plugins:
   - serverless-offline

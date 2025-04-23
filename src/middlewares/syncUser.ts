@@ -11,13 +11,15 @@ export const syncUser = (): MiddlewareObj<
 > => {
   const middleware: MiddlewareObj = {
     before: async (request) => {
-      if (process.env.NODE_ENV === "development") {
-        console.log("Desativando o middleware userSync no ambiente de desenvolvimento.");
-        return;
-      }
+      // if (process.env.NODE_ENV === "development") {
+      //   console.log("Desativando o middleware userSync no ambiente de desenvolvimento.");
+      //   return;
+      // }
 
+      
       const event = request.event as APIGatewayEventWithUser;
-      const claims = event.requestContext.authorizer?.jwt?.claims;
+      // console.log("Authorizer context:", event.requestContext.authorizer);
+      const claims = event.requestContext.authorizer?.claims;
 
       if (!claims?.sub) {
         throw new Error("Unauthorized: missing user sub in token");
@@ -26,6 +28,7 @@ export const syncUser = (): MiddlewareObj<
       const userId = claims.sub;
       const name = claims.name || "";
       const email = claims.email || "";
+      const picture = claims.picture || "";
 
       const { Item } = await dynamoDB.send(
         new GetCommand({
@@ -42,6 +45,7 @@ export const syncUser = (): MiddlewareObj<
               id: userId,
               name,
               email,
+              picture,
               createdAt: new Date().toISOString(),
             },
           })
