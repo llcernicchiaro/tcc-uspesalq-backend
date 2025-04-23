@@ -25,7 +25,22 @@ import {
   type GroupUpdate,
 } from "../types/schemas/group.ts";
 
-export async function getUserGroups(userId: string) {
+const getParticipantCount = async (groupId: string) => {
+  const result = await dynamoDB.send(
+    new QueryCommand({
+      TableName: "GroupMembershipTable",
+      KeyConditionExpression: "groupId = :groupId",
+      ExpressionAttributeValues: {
+        ":groupId": { S: groupId },
+      },
+      Select: "COUNT",
+    })
+  );
+
+  return result.Count ?? 0;
+};
+
+const getUserGroups = async (userId: string) => {
   // 1. Buscar os groupIds da membership
   const membershipResult = await dynamoDB.send(
     new QueryCommand({
@@ -59,20 +74,25 @@ export async function getUserGroups(userId: string) {
       (group) => !group.deletedAt
     ) || [];
 
-  const groupsIamAdmin = groups.filter((group) =>
-    membershipResult.Items?.some(
-      (item) => item.groupId.S === group.id && item.role === "admin"
-    )
+  const groupsWithRole = groups.map((group) => {
+    const membership = membershipResult.Items?.find(
+      (item) => item.groupId === group.id
+    );
+    return {
+      ...group,
+      role: membership?.role,
+    };
+  });
+
+  const enrichedGroups = await Promise.all(
+    groupsWithRole.map(async (group) => ({
+      ...group,
+      membersCount: await getParticipantCount(group.id),
+    }))
   );
 
-  const groupsIamMember = groups.filter((group) =>
-    membershipResult.Items?.some(
-      (item) => item.groupId.S === group.id && item.role !== "admin"
-    )
-  );
-
-  return { groupsIamAdmin, groupsIamMember };
-}
+  return enrichedGroups;
+};
 
 export const getGroupsByUser = createHandler(async (event) => {
   const userId = event.requestContext.authorizer?.claims?.sub;
