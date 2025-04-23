@@ -17,6 +17,7 @@ provider:
       statements:
         - Effect: Allow
           Action:
+            - s3:PutObject
             - dynamodb:PutItem
             - dynamodb:GetItem
             - dynamodb:Query
@@ -27,9 +28,14 @@ provider:
           Resource:
             - arn:aws:dynamodb:sa-east-1:299689717750:table/PerformancesTable
             - arn:aws:dynamodb:sa-east-1:299689717750:table/GroupsTable
+            - arn:aws:dynamodb:sa-east-1:299689717750:table/GroupsTable/index/IsActiveIndex
             - arn:aws:dynamodb:sa-east-1:299689717750:table/EventsTable
             - arn:aws:dynamodb:sa-east-1:299689717750:table/UsersTable
             - arn:aws:dynamodb:sa-east-1:299689717750:table/GroupMembershipTable
+            - arn:aws:dynamodb:sa-east-1:299689717750:table/GroupMembershipTable/index/GroupIdIndex
+            - arn:aws:dynamodb:sa-east-1:299689717750:table/GroupMembershipTable/index/UserIdIndex
+            - arn:aws:s3:::group-image-bucket-lorenzotcc
+            - arn:aws:s3:::event-image-bucket-lorenzotcc
 
 functions:
   listUsers:
@@ -116,6 +122,26 @@ functions:
               Ref: ApiGatewayAuthorizer
           cors: true
 
+  getPresignedUploadUrl:
+    handler: src/handlers/group.getPresignedUploadUrl
+    events:
+      - http:
+          path: groups/upload-url
+          method: post
+          authorizer:
+            type: COGNITO_USER_POOLS
+            authorizerId:
+              Ref: ApiGatewayAuthorizer
+          cors:
+            origin: "*"
+            headers:
+              - Content-Type
+              - Authorization
+              - X-Amz-Date
+              - X-Api-Key
+              - X-Amz-Security-Token
+            allowCredentials: false
+
 resources:
   Resources:
     UsersTable:
@@ -137,9 +163,18 @@ resources:
         AttributeDefinitions:
           - AttributeName: id
             AttributeType: S
+          - AttributeName: isActive
+            AttributeType: N
         KeySchema:
           - AttributeName: id
             KeyType: HASH
+        GlobalSecondaryIndexes:
+          - IndexName: IsActiveIndex
+            KeySchema:
+              - AttributeName: isActive
+                KeyType: HASH
+            Projection:
+              ProjectionType: ALL
         BillingMode: PAY_PER_REQUEST
 
     GroupMembershipTable:
@@ -161,6 +196,12 @@ resources:
           - IndexName: GroupIdIndex
             KeySchema:
               - AttributeName: groupId
+                KeyType: HASH
+            Projection:
+              ProjectionType: ALL
+          - IndexName: UserIdIndex
+            KeySchema:
+              - AttributeName: userId
                 KeyType: HASH
             Projection:
               ProjectionType: ALL
@@ -188,6 +229,16 @@ resources:
           - AttributeName: id
             KeyType: HASH
         BillingMode: PAY_PER_REQUEST
+
+    GroupImageBucket:
+      Type: AWS::S3::Bucket
+      Properties:
+        BucketName: group-image-bucket-lorenzotcc
+
+    EventImageBucket:
+      Type: AWS::S3::Bucket
+      Properties:
+        BucketName: event-image-bucket-lorenzotcc
 
     ApiGatewayAuthorizer:
       Type: AWS::ApiGateway::Authorizer

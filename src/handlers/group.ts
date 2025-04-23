@@ -1,14 +1,14 @@
-import type { APIGatewayEventWithUserAndBody } from "../types/api-gateway.js";
-
+import { randomUUID } from "node:crypto";
 import {
   QueryCommand,
   PutCommand,
-  ScanCommand,
   UpdateCommand,
   BatchGetCommand,
   BatchWriteCommand,
   GetCommand,
 } from "@aws-sdk/lib-dynamodb";
+import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 import { createHandler } from "../utils/handlers.ts";
 import { dynamoDB } from "../utils/dynamodb.ts";
@@ -24,14 +24,20 @@ import {
   type GroupInput,
   type GroupUpdate,
 } from "../types/schemas/group.ts";
+import type { APIGatewayEventWithUserAndBody } from "../types/api-gateway.js";
+
+const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp"];
+
+const s3 = new S3Client({ region: "sa-east-1" });
 
 const getParticipantCount = async (groupId: string) => {
   const result = await dynamoDB.send(
     new QueryCommand({
       TableName: "GroupMembershipTable",
+      IndexName: "GroupIdIndex",
       KeyConditionExpression: "groupId = :groupId",
       ExpressionAttributeValues: {
-        ":groupId": { S: groupId },
+        ":groupId": groupId,
       },
       Select: "COUNT",
     })
@@ -40,7 +46,8 @@ const getParticipantCount = async (groupId: string) => {
   return result.Count ?? 0;
 };
 
-const getUserGroups = async (userId: string) => {
+export const getGroupsByUser = createHandler(async (event) => {
+  const userId = event.requestContext.authorizer?.claims?.sub;
   // 1. Buscar os groupIds da membership
   const membershipResult = await dynamoDB.send(
     new QueryCommand({
@@ -53,9 +60,14 @@ const getUserGroups = async (userId: string) => {
     })
   );
 
-  const groupIds = membershipResult.Items?.map((item) => item.groupId.S) || [];
+  const groupIds = membershipResult.Items?.map((item) => item.groupId) || [];
 
-  if (groupIds.length === 0) return [];
+  if (groupIds.length === 0) {
+    return {
+      statusCode: 200,
+      body: JSON.stringify([]),
+    };
+  }
 
   // 2. Buscar os grupos com BatchGet
   const groupsResult = await dynamoDB.send(
@@ -91,16 +103,9 @@ const getUserGroups = async (userId: string) => {
     }))
   );
 
-  return enrichedGroups;
-};
-
-export const getGroupsByUser = createHandler(async (event) => {
-  const userId = event.requestContext.authorizer?.claims?.sub;
-  const groups = await getUserGroups(userId);
-
   return {
     statusCode: 200,
-    body: JSON.stringify(groups),
+    body: JSON.stringify(enrichedGroups),
   };
 });
 
@@ -137,17 +142,50 @@ export const createGroup = createHandler(
   [validateWithZod(groupInputSchema)]
 );
 
-export const getGroups = createHandler(async () => {
-  const result = await dynamoDB.send(
-    new ScanCommand({ TableName: "GroupsTable" })
+export const getGroups = createHandler(async (event) => {
+  const userId = event.requestContext.authorizer?.claims?.sub;
+
+  const groupsData = await dynamoDB.send(
+    new QueryCommand({
+      TableName: "GroupsTable",
+      IndexName: "IsActiveIndex",
+      KeyConditionExpression: "isActive = :active",
+      ExpressionAttributeValues: {
+        ":active": 1,
+      },
+    })
   );
 
-  const groups = result.Items || [];
-  const filteredGroups = groups.filter((group) => !group.deletedAt);
+  const allGroups = groupsData.Items ?? [];
+
+  // 2. Buscar grupos que o usuário participa
+  const membershipsData = await dynamoDB.send(
+    new QueryCommand({
+      TableName: "GroupMembershipTable",
+      IndexName: "UserIdIndex",
+      KeyConditionExpression: "userId = :userId",
+      ExpressionAttributeValues: {
+        ":userId": userId,
+      },
+      ProjectionExpression: "groupId",
+    })
+  );
+
+  const userGroupIds = new Set(
+    (membershipsData.Items ?? []).map((item) => item.groupId)
+  );
+
+  const enrichedGroups = await Promise.all(
+    allGroups.map(async (group) => ({
+      ...group,
+      membersCount: await getParticipantCount(group.id),
+      isMember: userGroupIds.has(group.id),
+    }))
+  );
 
   return {
     statusCode: 200,
-    body: JSON.stringify(filteredGroups),
+    body: JSON.stringify(enrichedGroups),
   };
 });
 
@@ -255,9 +293,10 @@ export const deleteGroup = createHandler(async (event) => {
     new UpdateCommand({
       TableName: "GroupsTable",
       Key: { id },
-      UpdateExpression: "SET deletedAt = :deletedAt",
+      UpdateExpression: "SET deletedAt = :deletedAt, isActive = :isActive",
       ExpressionAttributeValues: {
         ":deletedAt": deletedAt,
+        ":isActive": 0,
       },
     })
   );
@@ -380,6 +419,45 @@ export const getGroup = createHandler(
         ...group.Item,
         members: mappedMembers,
         events: eventsResult.Items,
+      }),
+    };
+  }
+);
+
+export const getPresignedUploadUrl = createHandler(
+  async (event: APIGatewayEventWithUserAndBody<{ fileType: string }>) => {
+    const { fileType } = event.body;
+
+    if (!fileType) {
+      return {
+        statusCode: 400,
+        body: JSON.stringify({ message: "fileType is required" }),
+      };
+    }
+
+    if (!ALLOWED_TYPES.includes(fileType)) {
+      return {
+        statusCode: 400,
+        body: JSON.stringify({ error: "Formato de arquivo inválido" }),
+      };
+    }
+
+    const extension = fileType.split("/")[1];
+    const key = `groups/${randomUUID()}.${extension}`;
+
+    const command = new PutObjectCommand({
+      Bucket: "group-image-bucket-lorenzotcc",
+      Key: key,
+      ContentType: fileType,
+    });
+
+    const uploadUrl = await getSignedUrl(s3, command, { expiresIn: 60 });
+
+    return {
+      statusCode: 200,
+      body: JSON.stringify({
+        uploadUrl,
+        fileUrl: `https://group-image-bucket-lorenzotcc.s3.amazonaws.com/${key}`,
       }),
     };
   }

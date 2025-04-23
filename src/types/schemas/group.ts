@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 export const groupInputSchema = z.object({
-  name: z.string().min(1),
+  name: z.string().min(3),
   description: z.string().optional(),
   type: z.enum(["open", "closed"]),
   imageUrl: z.string().url().optional(),
@@ -20,6 +20,7 @@ export const groupSchema = groupInputSchema.extend({
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime().optional(),
   deletedAt: z.string().datetime().optional(),
+  isActive: z.number().default(1), // 1 = ativo, 0 = inativo
 });
 
 export type GroupInput = z.infer<typeof groupInputSchema>;

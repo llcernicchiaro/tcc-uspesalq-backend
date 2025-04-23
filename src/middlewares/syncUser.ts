@@ -16,9 +16,7 @@ export const syncUser = (): MiddlewareObj<
       //   return;
       // }
 
-      
       const event = request.event as APIGatewayEventWithUser;
-      // console.log("Authorizer context:", event.requestContext.authorizer);
       const claims = event.requestContext.authorizer?.claims;
 
       if (!claims?.sub) {
