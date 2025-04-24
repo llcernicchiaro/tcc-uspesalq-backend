@@ -73,8 +73,8 @@ export const getGroupsByUser = createHandler(async (event) => {
   const groupsResult = await dynamoDB.send(
     new BatchGetCommand({
       RequestItems: {
-        groups: {
-          Keys: groupIds.map((id) => ({ groupId: id })),
+        GroupsTable: {
+          Keys: groupIds.map((id) => ({ id })),
         },
       },
     })
@@ -82,7 +82,7 @@ export const getGroupsByUser = createHandler(async (event) => {
 
   // 3. Mapear os grupos para o formato correto
   const groups =
-    (groupsResult.Responses?.groups as Group[]).filter(
+    (groupsResult.Responses?.GroupsTable as Group[]).filter(
       (group) => !group.deletedAt
     ) || [];
 
@@ -117,7 +117,7 @@ export const createGroup = createHandler(
     await dynamoDB.send(
       new PutCommand({
         TableName: "GroupsTable",
-        Item: { ...group, imageUrl: group.imageUrl || null },
+        Item: { ...group, imageUrl: group.imageUrl || null, isActive: 1 },
       })
     );
 
@@ -137,6 +137,10 @@ export const createGroup = createHandler(
     return {
       statusCode: 201,
       body: JSON.stringify({ message: "Group created", group }),
+      headers: {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Credentials": true,
+      },
     };
   },
   [validateWithZod(groupInputSchema)]
@@ -243,7 +247,7 @@ export const updateGroup = createHandler(
 
     return {
       statusCode: 200,
-      body: JSON.stringify({ message: "Workout updated" }),
+      body: JSON.stringify({ message: "Group updated" }),
     };
   },
   [validateWithZod(groupUpdateSchema)]
@@ -377,6 +381,7 @@ export const getGroup = createHandler(
     const membersResult = await dynamoDB.send(
       new QueryCommand({
         TableName: "GroupMembershipTable",
+        IndexName: "GroupIdIndex",
         KeyConditionExpression: "groupId = :groupId",
         ExpressionAttributeValues: {
           ":groupId": id,
@@ -385,16 +390,15 @@ export const getGroup = createHandler(
     );
 
     const members = membersResult.Items || [];
-
-    const userIds = members.map((m) => m.userId);
-
-    const userKeys = userIds.map((id) => ({ id }));
+    const userIds = members.map((member) => member.userId);
 
     const userResult = await dynamoDB.send(
-      new BatchGetCommand({ RequestItems: { Users: { Keys: userKeys } } })
+      new BatchGetCommand({
+        RequestItems: { UsersTable: { Keys: userIds.map((id) => ({ id })) } },
+      })
     );
 
-    const users = userResult.Responses?.Users || [];
+    const users = userResult.Responses?.UsersTable || [];
 
     const mappedMembers = members.map(({ userId, role }) => ({
       userId,
@@ -406,6 +410,7 @@ export const getGroup = createHandler(
     const eventsResult = await dynamoDB.send(
       new QueryCommand({
         TableName: "EventsTable",
+        IndexName: "GroupIdIndex",
         KeyConditionExpression: "groupId = :groupId",
         ExpressionAttributeValues: {
           ":groupId": id,
@@ -417,9 +422,18 @@ export const getGroup = createHandler(
       statusCode: 200,
       body: JSON.stringify({
         ...group.Item,
+        isMember: members.some(
+          (member) =>
+            member.userId === event.requestContext.authorizer?.claims?.sub
+        ),
+        membersCount: members.length,
         members: mappedMembers,
         events: eventsResult.Items,
       }),
+      headers: {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Credentials": true,
+      },
     };
   }
 );
@@ -459,6 +473,10 @@ export const getPresignedUploadUrl = createHandler(
         uploadUrl,
         fileUrl: `https://group-image-bucket-lorenzotcc.s3.amazonaws.com/${key}`,
       }),
+      headers: {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Credentials": true,
+      },
     };
   }
 );
