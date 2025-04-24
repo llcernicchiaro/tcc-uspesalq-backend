@@ -400,11 +400,16 @@ export const getGroup = createHandler(
 
     const users = userResult.Responses?.UsersTable || [];
 
+    const usersMap = users.reduce((acc, user) => {
+      acc[user.id] = user;
+      return acc;
+    }, {} as Record<string, { name: string; picture: string }>);
+
     const mappedMembers = members.map(({ userId, role }) => ({
       userId,
       role,
-      name: users[userId]?.name || null,
-      picture: users[userId]?.picture || null,
+      name: usersMap[userId]?.name || null,
+      picture: usersMap[userId]?.picture || null,
     }));
 
     const eventsResult = await dynamoDB.send(
