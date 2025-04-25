@@ -48,23 +48,11 @@ provider:
             - arn:aws:s3:::event-image-bucket-lorenzotcc/*
 
 functions:
-  listUsers:
-    handler: src/handlers/user.listUsers
-    events:
-      - http:
-          path: users
-          method: get
-          authorizer:
-            type: COGNITO_USER_POOLS
-            authorizerId:
-              Ref: ApiGatewayAuthorizer
-          cors: true
-
   createGroup:
     handler: src/handlers/group.createGroup
     events:
       - http:
-          path: group
+          path: groups
           method: post
           authorizer:
             type: COGNITO_USER_POOLS
@@ -84,11 +72,35 @@ functions:
               Ref: ApiGatewayAuthorizer
           cors: true
 
+  getGroupsByUser:
+    handler: src/handlers/group.getGroupsByUser
+    events:
+      - http:
+          path: groups/mine
+          method: get
+          authorizer:
+            type: COGNITO_USER_POOLS
+            authorizerId:
+              Ref: ApiGatewayAuthorizer
+          cors: true
+
+  getGroup:
+    handler: src/handlers/group.getGroup
+    events:
+      - http:
+          path: groups/{groupId}
+          method: get
+          authorizer:
+            type: COGNITO_USER_POOLS
+            authorizerId:
+              Ref: ApiGatewayAuthorizer
+          cors: true
+
   updateGroup:
     handler: src/handlers/group.updateGroup
     events:
       - http:
-          path: group/{id}
+          path: groups/{groupId}
           method: patch
           authorizer:
             type: COGNITO_USER_POOLS
@@ -100,32 +112,8 @@ functions:
     handler: src/handlers/group.deleteGroup
     events:
       - http:
-          path: group/{id}
+          path: groups/{groupId}
           method: delete
-          authorizer:
-            type: COGNITO_USER_POOLS
-            authorizerId:
-              Ref: ApiGatewayAuthorizer
-          cors: true
-
-  getGroup:
-    handler: src/handlers/group.getGroup
-    events:
-      - http:
-          path: group/{id}
-          method: get
-          authorizer:
-            type: COGNITO_USER_POOLS
-            authorizerId:
-              Ref: ApiGatewayAuthorizer
-          cors: true
-
-  getGroupsByUser:
-    handler: src/handlers/group.getGroupsByUser
-    events:
-      - http:
-          path: groups/mine
-          method: get
           authorizer:
             type: COGNITO_USER_POOLS
             authorizerId:
@@ -148,7 +136,7 @@ functions:
     handler: src/handlers/groupMembership.joinGroup
     events:
       - http:
-          path: group/{id}/join
+          path: groups/{groupId}/memberships
           method: post
           authorizer:
             type: COGNITO_USER_POOLS
@@ -160,8 +148,32 @@ functions:
     handler: src/handlers/groupMembership.leaveGroup
     events:
       - http:
-          path: group/{id}/leave
+          path: groups/{groupId}/memberships/leave
           method: post
+          authorizer:
+            type: COGNITO_USER_POOLS
+            authorizerId:
+              Ref: ApiGatewayAuthorizer
+          cors: true
+
+  updateMembershipStatus:
+    handler: src/handlers/groupMembership.updateMembershipStatus
+    events:
+      - http:
+          path: groups/{groupId}/memberships/{userId}/status
+          method: patch
+          authorizer:
+            type: COGNITO_USER_POOLS
+            authorizerId:
+              Ref: ApiGatewayAuthorizer
+          cors: true
+
+  getGroupMembers:
+    handler: src/handlers/groupMembership.getGroupMembers
+    events:
+      - http:
+          path: groups/{groupId}/memberships
+          method: get
           authorizer:
             type: COGNITO_USER_POOLS
             authorizerId:

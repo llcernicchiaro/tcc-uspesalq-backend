@@ -200,7 +200,7 @@ export const getGroups = createHandler(async (event) => {
 export const updateGroup = createHandler(
   async (event: APIGatewayEventWithUserAndBody<GroupUpdate>) => {
     const userId = event.requestContext.authorizer?.claims?.sub;
-    const id = event.pathParameters?.id;
+    const id = event.pathParameters?.groupId;
     const { name, description, imageUrl } = event.body;
 
     const group = await dynamoDB.send(
@@ -297,7 +297,7 @@ export const updateGroup = createHandler(
 
 export const deleteGroup = createHandler(async (event) => {
   const userId = event.requestContext.authorizer?.claims?.sub;
-  const id = event.pathParameters?.id;
+  const id = event.pathParameters?.groupId;
 
   const group = await dynamoDB.send(
     new QueryCommand({
@@ -405,7 +405,7 @@ export const deleteGroup = createHandler(async (event) => {
 
 export const getGroup = createHandler(
   async (event: APIGatewayEventWithUserAndBody<GroupInput>) => {
-    const id = event.pathParameters?.id;
+    const id = event.pathParameters?.groupId;
 
     const group = await dynamoDB.send(
       new GetCommand({
