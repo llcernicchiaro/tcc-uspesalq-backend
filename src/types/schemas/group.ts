@@ -16,7 +16,6 @@ export const groupUpdateSchema = z.object({
 
 export const groupSchema = groupInputSchema.extend({
   id: z.string(),
-  createdBy: z.string(), // ID do usuário criador do grupo
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime().optional(),
   deletedAt: z.string().datetime().optional(),

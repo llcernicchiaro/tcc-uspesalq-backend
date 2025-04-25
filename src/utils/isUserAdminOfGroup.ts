@@ -6,10 +6,7 @@ export const isUserAdminOfGroup = async (groupId: string, userId: string) => {
   const result = await dynamoDB.send(
     new GetCommand({
       TableName: "GroupMembershipTable",
-      Key: {
-        groupId: { S: groupId },
-        userId: { S: userId },
-      },
+      Key: { groupId, userId },
     })
   );
 

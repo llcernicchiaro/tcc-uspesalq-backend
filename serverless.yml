@@ -19,6 +19,7 @@ provider:
           Action:
             - s3:PutObject
             - s3:GetObject
+            - s3:DeleteObject
             - dynamodb:PutItem
             - dynamodb:GetItem
             - dynamodb:Query
@@ -38,6 +39,9 @@ provider:
             - arn:aws:dynamodb:sa-east-1:299689717750:table/GroupMembershipTable
             - arn:aws:dynamodb:sa-east-1:299689717750:table/GroupMembershipTable/index/GroupIdIndex
             - arn:aws:dynamodb:sa-east-1:299689717750:table/GroupMembershipTable/index/UserIdIndex
+            - arn:aws:dynamodb:sa-east-1:299689717750:table/EventRegistrationsTable
+            - arn:aws:dynamodb:sa-east-1:299689717750:table/EventRegistrationsTable/index/eventIdIndex
+            - arn:aws:dynamodb:sa-east-1:299689717750:table/EventRegistrationsTable/index/userIdIndex
             - arn:aws:s3:::group-image-bucket-lorenzotcc
             - arn:aws:s3:::group-image-bucket-lorenzotcc/*
             - arn:aws:s3:::event-image-bucket-lorenzotcc
@@ -85,7 +89,7 @@ functions:
     events:
       - http:
           path: group/{id}
-          method: put
+          method: patch
           authorizer:
             type: COGNITO_USER_POOLS
             authorizerId:
@@ -133,6 +137,30 @@ functions:
     events:
       - http:
           path: groups/upload-url
+          method: post
+          authorizer:
+            type: COGNITO_USER_POOLS
+            authorizerId:
+              Ref: ApiGatewayAuthorizer
+          cors: true
+
+  joinGroup:
+    handler: src/handlers/groupMembership.joinGroup
+    events:
+      - http:
+          path: group/{id}/join
+          method: post
+          authorizer:
+            type: COGNITO_USER_POOLS
+            authorizerId:
+              Ref: ApiGatewayAuthorizer
+          cors: true
+
+  leaveGroup:
+    handler: src/handlers/groupMembership.leaveGroup
+    events:
+      - http:
+          path: group/{id}/leave
           method: post
           authorizer:
             type: COGNITO_USER_POOLS
@@ -221,6 +249,35 @@ resources:
           - IndexName: GroupIdIndex
             KeySchema:
               - AttributeName: groupId
+                KeyType: HASH
+            Projection:
+              ProjectionType: ALL
+
+    EventRegistrationsTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: EventRegistrationsTable
+        BillingMode: PAY_PER_REQUEST
+        AttributeDefinitions:
+          - AttributeName: id
+            AttributeType: S
+          - AttributeName: eventId
+            AttributeType: S
+          - AttributeName: userId
+            AttributeType: S
+        KeySchema:
+          - AttributeName: id
+            KeyType: HASH
+        GlobalSecondaryIndexes:
+          - IndexName: EventIdIndex
+            KeySchema:
+              - AttributeName: eventId
+                KeyType: HASH
+            Projection:
+              ProjectionType: ALL
+          - IndexName: UserIdIndex
+            KeySchema:
+              - AttributeName: userId
                 KeyType: HASH
             Projection:
               ProjectionType: ALL

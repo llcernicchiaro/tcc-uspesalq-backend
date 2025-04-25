@@ -7,7 +7,11 @@ import {
   BatchWriteCommand,
   GetCommand,
 } from "@aws-sdk/lib-dynamodb";
-import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
+import {
+  S3Client,
+  PutObjectCommand,
+  DeleteObjectCommand,
+} from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 import { createHandler } from "../utils/handlers.ts";
@@ -226,28 +230,66 @@ export const updateGroup = createHandler(
       };
     }
 
+    // 3. Deleta imagem antiga se necessário
+    if (imageUrl && groupItem.imageUrl && groupItem.imageUrl !== imageUrl) {
+      const oldKey = groupItem.imageUrl.split(".com/")[1];
+      await s3.send(
+        new DeleteObjectCommand({
+          Bucket: "group-image-bucket-lorenzotcc",
+          Key: oldKey,
+        })
+      );
+    }
+
+    // 4. Monta update dinâmico
+    const updateExpressions: string[] = [];
+    const expressionAttributeValues: Record<string, string | number | boolean> =
+      {};
+    const expressionAttributeNames: Record<string, string> = {};
+
+    if (name) {
+      updateExpressions.push("#name = :name");
+      expressionAttributeValues[":name"] = name;
+      expressionAttributeNames["#name"] = "name";
+    }
+
+    if (description) {
+      updateExpressions.push("#description = :description");
+      expressionAttributeValues[":description"] = description;
+      expressionAttributeNames["#description"] = "description";
+    }
+
+    if (imageUrl) {
+      updateExpressions.push("#imageUrl = :imageUrl");
+      expressionAttributeValues[":imageUrl"] = imageUrl;
+      expressionAttributeNames["#imageUrl"] = "imageUrl";
+    }
+
+    if (updateExpressions.length === 0) {
+      return {
+        statusCode: 400,
+        body: JSON.stringify({ error: "Nada para atualizar" }),
+      };
+    }
+
+    // 5. Atualiza no DynamoDB
     await dynamoDB.send(
       new UpdateCommand({
         TableName: "GroupsTable",
         Key: { id },
-        UpdateExpression:
-          "SET #name = :name, #description = :description, #imageUrl = :imageUrl",
-        ExpressionAttributeNames: {
-          "#name": "name",
-          "#description": "description",
-          "#imageUrl": "imageUrl",
-        },
-        ExpressionAttributeValues: {
-          ":name": name,
-          ":description": description,
-          ":imageUrl": imageUrl,
-        },
+        UpdateExpression: `SET ${updateExpressions.join(", ")}`,
+        ExpressionAttributeValues: expressionAttributeValues,
+        ExpressionAttributeNames: expressionAttributeNames,
       })
     );
 
     return {
       statusCode: 200,
       body: JSON.stringify({ message: "Group updated" }),
+      headers: {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Credentials": true,
+      },
     };
   },
   [validateWithZod(groupUpdateSchema)]
@@ -309,6 +351,7 @@ export const deleteGroup = createHandler(async (event) => {
   const queryResult = await dynamoDB.send(
     new QueryCommand({
       TableName: "GroupMembershipTable",
+      IndexName: "GroupIdIndex",
       KeyConditionExpression: "groupId = :groupId",
       ExpressionAttributeValues: {
         ":groupId": id,
@@ -427,10 +470,10 @@ export const getGroup = createHandler(
       statusCode: 200,
       body: JSON.stringify({
         ...group.Item,
-        isMember: members.some(
+        role: members.find(
           (member) =>
             member.userId === event.requestContext.authorizer?.claims?.sub
-        ),
+        )?.role,
         membersCount: members.length,
         members: mappedMembers,
         events: eventsResult.Items,
