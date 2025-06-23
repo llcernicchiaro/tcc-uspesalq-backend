@@ -1,6 +1,6 @@
 import type { MiddlewareObj } from "@middy/core";
 import type { APIGatewayProxyResult } from "aws-lambda";
-import type { APIGatewayEventWithUserAndBody } from "../types/api-gateway.d.ts";
+import type { APIGatewayEventWithUserAndBody } from "../types/api-gateway.js";
 
 import middy from "@middy/core";
 import httpHeaderNormalizer from "@middy/http-header-normalizer";
